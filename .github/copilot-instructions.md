@@ -32,8 +32,14 @@ pip install requests beautifulsoup4 lxml
 ## Usage Patterns
 
 ```bash
-# Basic crawl
+# Auto-saves to crawls/{hostname}_{datetime}.json
 python crawler.py https://example.com --pretty
+
+# With real-time progress and summary
+python crawler.py https://example.com --verbose --pretty
+
+# Output to stdout
+python crawler.py https://example.com --pretty --out -
 
 # Full options
 python crawler.py https://example.com \
@@ -41,16 +47,25 @@ python crawler.py https://example.com \
   --timeout 15 \
   --user-agent "MyBot/1.0" \
   --respect-robots \
-  --out results.json \
-  --verbose
+  --out custom.json \
+  --verbose \
+  --pretty
 ```
+
+## Verbose Output
+
+When `--verbose` is enabled:
+- Real-time progress: `[scanned/max] Visited: X | Discovered: Y | Queue: Z`
+- Per-page details: status code, URL, new links found
+- Final summary with statistics
 
 ## Code Conventions
 
 - **Type hints**: All functions use type annotations (`List`, `Optional`, `Tuple` from typing)
-- **Dataclasses**: `PageResult` for structured output with `asdict()` serialization
+- **Dataclasses with slots**: `PageResult` and `CrawlStats` use `@dataclass(slots=True)` for memory efficiency
 - **URL handling**: Always normalize via `normalize_url()` before comparison/storage
 - **Error handling**: `requests.RequestException` caught; failures recorded with `status_code=None`
+- **Performance**: `SoupStrainer` for link extraction, `frozenset` for O(1) extension lookups, `defaultdict` for inlinks
 
 ## Output Schema
 

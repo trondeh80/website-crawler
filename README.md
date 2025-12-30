@@ -14,13 +14,23 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
+# Auto-saves to crawls/{hostname}_{datetime}.json
 python crawler.py https://example.com --pretty
+
+# With progress output
+python crawler.py https://example.com --verbose --pretty
 ```
 
-### Write to a file:
+### Output to stdout:
 
 ```bash
-python crawler.py https://example.com --pretty --out results.json
+python crawler.py https://example.com --pretty --out -
+```
+
+### Write to a specific file:
+
+```bash
+python crawler.py https://example.com --pretty --out custom_output.json
 ```
 
 
