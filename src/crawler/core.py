@@ -1,17 +1,12 @@
-#!/usr/bin/env python3
 """
-Web crawler that performs BFS traversal of local links from a start URL.
-Outputs JSON results with page metadata (title, H1 tags, status codes, backlinks).
+Core crawling logic and data structures.
 """
 from __future__ import annotations
 
-import argparse
-import json
 import sys
 from collections import defaultdict, deque
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Deque, Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse, urlunparse, urldefrag
 
@@ -122,6 +117,14 @@ def is_local(url: str, start_origin: Tuple[str, str]) -> bool:
     return (parsed.scheme, parsed.netloc) == start_origin
 
 
+def matches_path_prefix(url: str, path_prefix: Optional[str]) -> bool:
+    """Check if URL path starts with the given prefix."""
+    if path_prefix is None:
+        return True
+    parsed = urlparse(url)
+    return parsed.path.startswith(path_prefix)
+
+
 def extract_links(html: str) -> List[str]:
     """Extract all href values from <a> tags using optimized parsing."""
     soup = BeautifulSoup(html, "lxml", parse_only=LINK_STRAINER)
@@ -175,16 +178,35 @@ def crawl(
     user_agent: str,
     respect_robots: bool,
     verbose: bool,
+    path_prefix: Optional[str] = None,
 ) -> Tuple[List[PageResult], CrawlStats]:
     """
     Crawl all local links starting from a URL using BFS traversal.
     
-    Returns tuple of (results list, crawl statistics).
+    Args:
+        start_url: The URL to start crawling from.
+        max_pages: Maximum number of pages to crawl.
+        timeout_s: HTTP request timeout in seconds.
+        user_agent: User-Agent header to use for requests.
+        respect_robots: Whether to respect robots.txt rules.
+        verbose: Whether to print progress information.
+        path_prefix: Optional path prefix to limit crawling (e.g., "/rettskilder").
+                     Only URLs whose path starts with this prefix will be crawled.
+    
+    Returns:
+        Tuple of (results list, crawl statistics).
     """
     # Normalize and validate start URL
     start_url_normalized = normalize_url(start_url, start_url)
     if not start_url_normalized:
         raise ValueError(f"Invalid start URL: {start_url}")
+
+    # Validate that start URL matches path prefix if specified
+    if path_prefix and not matches_path_prefix(start_url_normalized, path_prefix):
+        raise ValueError(
+            f"Start URL path does not match --path-prefix '{path_prefix}'. "
+            f"Start URL should begin with the path prefix."
+        )
 
     start_parsed = urlparse(start_url_normalized)
     start_origin = (start_parsed.scheme, start_parsed.netloc)
@@ -209,7 +231,10 @@ def crawl(
 
     if verbose:
         sys.stderr.write(f"Starting crawl from: {start_url_normalized}\n")
-        sys.stderr.write(f"Max pages: {max_pages}\n\n")
+        sys.stderr.write(f"Max pages: {max_pages}\n")
+        if path_prefix:
+            sys.stderr.write(f"Path prefix filter: {path_prefix}\n")
+        sys.stderr.write("\n")
 
     while queue and stats.pages_crawled < max_pages:
         url = queue.popleft()
@@ -266,6 +291,10 @@ def crawl(
             for href in extract_links(html):
                 target = normalize_url(href, base=url)
                 if not target or not is_local(target, start_origin):
+                    continue
+                
+                # Apply path prefix filter
+                if not matches_path_prefix(target, path_prefix):
                     continue
 
                 inlinks[target].add(url)
@@ -352,87 +381,3 @@ def _mark_skipped(results: Dict[str, PageResult], url: str) -> None:
     result.title = None
     result.h1_present = None
     result.h1_contents = None
-
-
-def print_summary(stats: CrawlStats) -> None:
-    """Print crawl summary to stderr."""
-    sys.stderr.write("=" * 50 + "\n")
-    sys.stderr.write("CRAWL SUMMARY\n")
-    sys.stderr.write("=" * 50 + "\n\n")
-    
-    sys.stderr.write(f"Total pages crawled:    {stats.pages_crawled}\n")
-    sys.stderr.write(f"Pages without title:    {stats.pages_without_title}\n")
-    sys.stderr.write(f"Pages without H1:       {stats.pages_without_h1}\n\n")
-    
-    if stats.error_counts:
-        sys.stderr.write("Errors by type:\n")
-        for error_type, count in sorted(stats.error_counts.items()):
-            label = "Connection errors" if error_type == "connection_error" else f"HTTP {error_type}"
-            sys.stderr.write(f"  {label}: {count}\n")
-    else:
-        sys.stderr.write("No errors encountered.\n")
-    
-    sys.stderr.write("\n")
-
-
-def generate_output_path(start_url: str) -> Path:
-    """Generate output path: crawls/{hostname}_{datetime}.json"""
-    parsed = urlparse(start_url)
-    hostname = parsed.hostname or "unknown"
-    # Sanitize hostname for filename (replace dots with underscores)
-    hostname_safe = hostname.replace(".", "_")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    crawls_dir = Path("crawls")
-    crawls_dir.mkdir(exist_ok=True)
-    
-    return crawls_dir / f"{hostname_safe}_{timestamp}.json"
-
-
-def main() -> int:
-    """Main entry point for the crawler CLI."""
-    parser = argparse.ArgumentParser(
-        description="Crawl all local links starting from a URL and output JSON results."
-    )
-    parser.add_argument("start_url", help="Start URL (e.g. https://example.com)")
-    parser.add_argument("--max-pages", type=int, default=500, help="Maximum pages to scan (default: 500)")
-    parser.add_argument("--timeout", type=float, default=15.0, help="Request timeout in seconds (default: 15)")
-    parser.add_argument("--user-agent", default="LocalLinkCrawler/1.0", help="User-Agent header")
-    parser.add_argument("--respect-robots", action="store_true", help="Try to respect robots.txt Disallow rules")
-    parser.add_argument("--out", help="Output file path, or '-' for stdout (default: auto-generated in crawls/)")
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    parser.add_argument("--verbose", action="store_true", help="Show progress and summary")
-    args = parser.parse_args()
-
-    results, stats = crawl(
-        start_url=args.start_url,
-        max_pages=args.max_pages,
-        timeout_s=args.timeout,
-        user_agent=args.user_agent,
-        respect_robots=args.respect_robots,
-        verbose=args.verbose,
-    )
-
-    # Print summary if verbose
-    if args.verbose:
-        print_summary(stats)
-
-    # Output JSON
-    payload = [asdict(r) for r in results]
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2 if args.pretty else None)
-
-    if args.out == "-":
-        print(json_text)
-    else:
-        # Auto-generate path if not specified
-        output_path = Path(args.out) if args.out else generate_output_path(args.start_url)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json_text, encoding="utf-8")
-        if args.verbose:
-            sys.stderr.write(f"Results written to: {output_path}\n")
-
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
