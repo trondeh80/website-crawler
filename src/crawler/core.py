@@ -190,7 +190,7 @@ def crawl(
         user_agent: User-Agent header to use for requests.
         respect_robots: Whether to respect robots.txt rules.
         verbose: Whether to print progress information.
-        path_prefix: Optional path prefix to limit crawling (e.g., "/rettskilder").
+        path_prefix: Optional path prefix to limit crawling (e.g., "/products").
                      Only URLs whose path starts with this prefix will be crawled.
     
     Returns:

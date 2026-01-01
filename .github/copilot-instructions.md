@@ -109,8 +109,8 @@ python -m crawler https://example.com --pretty
 The `--path-prefix` option limits crawling to URLs whose path starts with the given prefix:
 
 ```bash
-# Only crawl pages under /rettskilder
-crawler https://lovdata.no/rettskilder --path-prefix /rettskilder
+# Only crawl pages under /products
+crawler https://lovdata.no/products --path-prefix /products
 
 # Only crawl documentation
 crawler https://docs.example.com/api --path-prefix /api

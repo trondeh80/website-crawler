@@ -61,7 +61,7 @@ def main() -> int:
     parser.add_argument("--respect-robots", action="store_true", help="Try to respect robots.txt Disallow rules")
     parser.add_argument(
         "--path-prefix",
-        help="Limit crawling to URLs whose path starts with this prefix (e.g., '/rettskilder')"
+        help="Limit crawling to URLs whose path starts with this prefix (e.g., '/products')"
     )
     parser.add_argument("--out", help="Output file path, or '-' for stdout (default: auto-generated in crawls/)")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
